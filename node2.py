@@ -4,20 +4,26 @@ from flasgger import Swagger
 from blockchain import Blockchain
 
 app = Flask(__name__)
-swagger = Swagger(app)
-blockchain = Blockchain()
+swagger = Swagger(app, template={
+    "info": {
+        "title": "Node 2 - Blockchain API",
+        "description": "Swagger documentation for the second node (port 5001) of the blockchain network.",
+        "version": "1.0"
+    }
+})
 
+blockchain = Blockchain()
 
 @app.route('/chain', methods=['GET'])
 def get_chain():
     """
-    Get the full blockchain
+    Get the current blockchain.
     ---
     tags:
       - Blockchain
     responses:
       200:
-        description: Returns the full blockchain
+        description: Returns the full chain and its length
     """
     chain_data = [block.__dict__ for block in blockchain.chain]
     return jsonify({
@@ -25,11 +31,10 @@ def get_chain():
         "chain": chain_data
     }), 200
 
-
 @app.route('/mine', methods=['GET'])
 def mine_unconfirmed_transactions():
     """
-    Mine unconfirmed transactions and reward the miner
+    Mine unconfirmed transactions.
     ---
     tags:
       - Mining
@@ -38,12 +43,12 @@ def mine_unconfirmed_transactions():
         in: query
         type: string
         required: true
-        description: Wallet address of the miner
+        description: Address of the miner to reward
     responses:
-      201:
-        description: Block mined successfully
       200:
         description: No transactions to mine
+      201:
+        description: Block has been mined
     """
     miner_address = request.args.get("miner")
     result = blockchain.mine(miner_address)
@@ -51,17 +56,16 @@ def mine_unconfirmed_transactions():
         return jsonify({"message": "No transactions to mine"}), 200
     return jsonify({"message": f"Block #{result} has been mined."}), 201
 
-
 @app.route('/add_transaction', methods=['POST'])
 def add_transaction():
     """
-    Add a new transaction
+    Add a new transaction.
     ---
     tags:
       - Transactions
     parameters:
       - in: body
-        name: transaction
+        name: body
         required: true
         schema:
           type: object
@@ -72,13 +76,10 @@ def add_transaction():
           properties:
             sender:
               type: string
-              example: Alice
             recipient:
               type: string
-              example: Bob
             amount:
               type: number
-              example: 10
     responses:
       201:
         description: Transaction added successfully
@@ -89,8 +90,6 @@ def add_transaction():
     """
     try:
         tx_data = request.get_json()
-        print("Received transaction data:", tx_data)
-
         required_fields = ["sender", "recipient", "amount"]
         if not tx_data or not all(field in tx_data for field in required_fields):
             return jsonify({"error": "Invalid transaction data. Required fields: sender, recipient, amount"}), 400
@@ -98,20 +97,18 @@ def add_transaction():
         blockchain.add_new_transaction(tx_data)
         return jsonify({"message": "Transaction added successfully"}), 201
     except Exception as e:
-        print("Error while processing transaction:", str(e))
         return jsonify({"error": "Internal server error"}), 500
-
 
 @app.route('/validate_chain', methods=['GET'])
 def validate_chain():
     """
-    Validate the integrity of the blockchain
+    Validate the blockchain.
     ---
     tags:
       - Blockchain
     responses:
       200:
-        description: Returns whether the blockchain is valid
+        description: Returns whether the chain is valid
     """
     is_valid = blockchain.is_chain_valid()
     return jsonify({
@@ -119,31 +116,28 @@ def validate_chain():
         "message": "Blockchain is valid." if is_valid else "Blockchain is invalid!"
     }), 200
 
-
 @app.route('/register_node', methods=['POST'])
 def register_node():
     """
-    Register a new peer node
+    Register a new peer node.
     ---
     tags:
       - Network
     parameters:
       - in: body
-        name: node
+        name: body
         required: true
         schema:
           type: object
-          required:
-            - address
           properties:
             address:
               type: string
-              example: http://127.0.0.1:5001
+              example: http://127.0.0.1:5000
     responses:
       201:
         description: Node registered successfully
       400:
-        description: Invalid node data
+        description: Invalid node address
     """
     data = request.get_json()
     node_address = data.get("address")
@@ -155,17 +149,16 @@ def register_node():
         "total_nodes": list(blockchain.nodes)
     }), 201
 
-
 @app.route('/resolve_conflicts', methods=['GET'])
 def resolve_conflicts():
     """
-    Resolve conflicts between different nodes (Consensus)
+    Resolve blockchain conflicts using consensus.
     ---
     tags:
       - Network
     responses:
       200:
-        description: Conflict resolution result
+        description: Conflict resolved or already authoritative
     """
     replaced = blockchain.resolve_conflicts()
     return jsonify({
@@ -174,6 +167,5 @@ def resolve_conflicts():
         "chain": [block.__dict__ for block in blockchain.chain]
     }), 200
 
-
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(port=5001)
